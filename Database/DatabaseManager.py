@@ -1,11 +1,16 @@
 """
 All the interaction with the database should go through here
 """
+import datetime
+
+import pandas as pd
 from sqlalchemy import create_engine, select
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.sql.expression import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from Database.Tables import Base, Bank, BankAccount
+from Database.Tables import Base, Bank, BankAccount, BankTransaction
 
 # DB constants
 DB_FILENAME = "modailmara-finances.db"
@@ -66,7 +71,7 @@ class DatabaseManager:
                 # already a bank with these details
                 # ignore and do nothing
                 pass
-        return bank
+        return institution_number
 
     def get_all_banks(self):
         """
@@ -78,20 +83,33 @@ class DatabaseManager:
             all_banks = session.execute(select(Bank)).scalars().all()
         return all_banks
 
-    def add_bank_account(self, bank, name, account_number):
+    def get_all_accounts(self):
         """
-        Add a bank account to the database
-        :param bank:
-        :type bank: Bank
-        :param name:
+
+        :return: List of all the account objects
+        :rtype: list
+        """
+        account_details = []
+        with Session(self.__db_engine) as session:
+            for account in session.execute(select(BankAccount)).scalars().all():
+                details = (account.account_number, account.name, account.bank_id)
+                account_details.append(details)
+        return account_details
+
+    def add_bank_account(self, institution_number, name, account_number):
+        """
+        Add a bank account to the database. The new bank account is held by an existing bank.
+
+        :param bank: institution_number of The bank that holds the new account
+        :type bank: str
+        :param name: The name of the new account
         :type name: str
-        :param account_number:
+        :param account_number: Unique number to identify the account
         :type account_number: str
-        :return:
-        :rtype:
         """
         with Session(self.__db_engine) as session:
-            account = BankAccount(name=name, account_number=account_number, bank=bank)
+            # bank = session.query(Bank).get(institution_number)
+            account = BankAccount(name=name, account_number=account_number, bank_id=institution_number)
 
             session.add(account)
             session.commit()
@@ -99,10 +117,55 @@ class DatabaseManager:
 
     def add_bulk_transactions(self, transactions_df):
         """
+        Adds all transactions in transactions_df (one per row) to the BankTransaction table.
 
+        Assumes:
+          - BankTransaction, BankAccount tables exist
+          - the account number(s) in the transactions refer to existing accounts
         :param transactions_df:
         :type transactions_df: pandas.DataFrame
         :return:
         :rtype:
         """
-        pass
+        with Session(self.__db_engine) as session:
+            # transactions_df.to_sql('BankTransaction', self.__db_engine, if_exists='append', index=False)
+            transactions_dict = transactions_df.to_dict('records')
+            stmt = insert(BankTransaction).values(transactions_dict)
+            stmt = stmt.on_conflict_do_nothing(index_elements=["account_number", 'amount', 'date', 'comment'])
+
+            session.execute(stmt)
+            session.commit()
+
+    def get_account_transactions(self, account_number):
+        """
+
+        :param account_number:
+        :type account_number:
+        :return:
+        :rtype:
+        """
+        # with Session(self.__db_engine) as session:
+        stmt = select(BankTransaction)\
+            .where(BankTransaction.account_number == account_number)\
+            .order_by(BankTransaction.date)
+        transactions_df = pd.read_sql(stmt, self.__db_engine)
+
+        return transactions_df
+
+    def get_account_summary(self, account_number):
+        """
+
+        :param account_number:
+        :type account_number:
+        :return:
+        :rtype:
+        """
+        with Session(self.__db_engine) as session:
+            stmt = (
+                select(func.count(), func.sum(BankTransaction.amount),
+                       func.min(BankTransaction.date), func.max(BankTransaction.date))
+                .select_from(BankTransaction)
+                .where(BankTransaction.account_number == account_number)
+            )
+            result = session.execute(stmt).all()[0]
+        return result

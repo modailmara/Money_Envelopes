@@ -45,7 +45,8 @@ class TextInterface:
                     filename = self.choose_import_file()
                     if filename is not None:
                         self._parse_data.import_transactions_file(account_number, filename)
-
+            elif option == '98':
+                self._parse_data.reset_database()
             elif option.lower() in ['q', 'quit']:
                 print('Quitting MoneyEnvelopes')
                 break
@@ -63,7 +64,7 @@ class TextInterface:
             print('\n---')
             print('Choose a bank account:')
             account_names = []  # list of account_number
-            for bank_name, account_name, account_number in self._parse_data.get_accounts_list():
+            for account_number, account_name, bank_id in self._parse_data.get_accounts_list():
                 num = len(account_names)
                 account_names.append(account_number)
                 print(f'  {num} - {account_name} ({account_number})')
@@ -145,6 +146,7 @@ class TextInterface:
           -----------------------------------------------------------------
           Total:       $112,629.15    13,005    15-Nov-2016    02-Apr-2023
         """
+        print()
         # column widths
         column_padding = 4
         account_str = "Account"
@@ -172,30 +174,39 @@ class TextInterface:
         num_trans_total = 0
         earliest_date = datetime.datetime.now()
         latest_date = datetime.datetime(2000, 1, 1)
-        for _, account_name, balance, num_transactions, earliest, latest in self._parse_data.get_accounts_list():
+        for account_name, balance, num_transactions, earliest, latest in self._parse_data.get_accounts_summary_list():
             info_str = f"{account_name:<{account_width}}"
 
+            balance = 0 if balance is None else balance
             total_balance += balance
             balance_str = locale.currency(balance, grouping=True)
             info_str += f"{balance_str:>{balance_width}}"
 
+            num_transactions = 0 if num_transactions is None else num_transactions
             num_trans_total += num_transactions
             info_str += f"{num_transactions:>{num_trans_width}}"
 
-            earliest_date = min(earliest_date, earliest)
-            earliest_str = earliest.strftime('%d-%b-%Y')
+            if type(earliest) == datetime.datetime:
+                earliest_date = min(earliest_date, earliest)
+                earliest_str = earliest.strftime('%d-%b-%Y')
+            else:
+                earliest_str = '-'
             info_str += f"{earliest_str:>{earliest_width}}"
 
-            latest_date = max(latest_date, latest)
-            latest_str = latest.strftime('%d-%b-%Y')
+            if type(latest) == datetime.datetime:
+                latest_date = max(latest_date, latest)
+                latest_str = latest.strftime('%d-%b-%Y')
+            else:
+                latest_str = '-'
             info_str += f"{latest_str:>{latest_width}}"
             print(info_str)
 
         print('-' * (account_width + balance_width + num_trans_width + earliest_width + latest_width))
-        total_str = f"{account_str:^{account_width}}"
+        total_str = 'Total'
+        total_str = f"{total_str:^{account_width}}"
         total_balance_str = locale.currency(total_balance, grouping=True)
         total_str += f"{total_balance_str:>{balance_width}}"
-        total_str += f"{num_trans_str:>{num_trans_width}}"
+        total_str += f"{num_trans_total:>{num_trans_width}}"
         earliest_str = earliest_date.strftime('%d-%b-%Y')
         total_str += f"{earliest_str:>{earliest_width}}"
         latest_str = latest_date.strftime('%d-%b-%Y')

@@ -56,9 +56,9 @@ class BankTransaction(Base):
     account_number: Mapped[int] = mapped_column(ForeignKey('bank_account.account_number'), primary_key=True)
     amount: Mapped[float] = mapped_column(primary_key=True)
     date: Mapped[datetime] = mapped_column(primary_key=True)
+    comment: Mapped[str] = mapped_column(primary_key=True)
 
     reviewed: Mapped[bool]
-    comment: Mapped[Optional[str]]
 
 
 class Envelope(Base):
