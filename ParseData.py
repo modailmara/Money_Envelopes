@@ -29,8 +29,8 @@ class ParseData:
 
         Summary data for an account is a tuple:
           - account name,
-          - number of transactions,
           - balance,
+          - number of transactions,
           - date of earliest transaction,
           - date of most recent transaction
 

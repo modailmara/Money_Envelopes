@@ -167,14 +167,14 @@ class TestParseData(unittest.TestCase):
                                    names=['account', 'date', 'comment', 'type', 'out', 'in', 'balance'],
                                    parse_dates=['date'])
 
-            self.assertEqual(len(input_df), summary[1])  # number of transactions
-            self.assertAlmostEqual(input_df['in'].sum() - input_df['out'].sum(), summary[2], places=2)  # balance
+            self.assertEqual(len(input_df), summary[2])  # number of transactions
+            self.assertAlmostEqual(input_df['in'].sum() - input_df['out'].sum(), summary[1], places=2)  # balance
             self.assertEqual(input_df.date.min(), summary[3])  # min date
             self.assertEqual(input_df.date.max(), summary[4])  # max date
 
     def check_account_details(self, account, account_details):
-        self.assertEqual(account_details['account_number'], account.account_number)
-        self.assertEqual(account_details['account_name'], account.name)
+        self.assertEqual(account_details['account_number'], account[0])
+        self.assertEqual(account_details['account_name'], account[1])
 
 
 if __name__ == '__main__':
