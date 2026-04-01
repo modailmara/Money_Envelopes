@@ -16,7 +16,7 @@ class ParseData:
 
     def get_accounts_list(self):
         """
-        Gets information for all the existing bank accounts in the database: name, number, bank_id
+        Gets information for all the existing bank accounts in the database: number, name, bank_id
 
         :return: List of info for all accounts
         :rtype: list
@@ -34,7 +34,7 @@ class ParseData:
           - date of earliest transaction,
           - date of most recent transaction
 
-        :return:
+        :return: List of tuples (name, balance, #trans, earliest date, latest date)
         :rtype: list
         """
         accounts = self._db.get_all_accounts()
@@ -42,6 +42,28 @@ class ParseData:
         for account in accounts:
             name = account[1]
             num_trans, balance, earliest_trans, latest_trans = self._db.get_account_summary(account[0])
+            summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
+        return summary_list
+
+    def get_envelopes_summary_list(self):
+        """
+        Returns summary information about envelopes and their transactions
+
+        Summary data for an account is a tuple:
+          - envelope name,
+          - balance,
+          - number of transactions,
+          - date of earliest transaction,
+          - date of most recent transaction
+
+        :return: List of tuples (name, balance, #trans, earliest date, latest date)
+        :rtype: list
+        """
+        envelopes = self._db.get_all_envelopes()
+        summary_list = []
+        for envelope in envelopes:
+            name = envelope[0]
+            num_trans, balance, earliest_trans, latest_trans = self._db.get_envelope_summary(envelope[0])
             summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
         return summary_list
 
@@ -58,13 +80,26 @@ class ParseData:
         :type account_number: str
         :param account_name:
         :type account_name: str
-        :return:
-        :rtype:
+        :return: The new account object
+        :rtype: BankAccount object
         """
         self._db.add_bank(bank_name, transit_number, institution_number)
         account = self._db.add_bank_account(institution_number, account_name, account_number)
 
         return account
+
+    def create_new_envelope(self, name, description):
+        """
+        Creates a new envelope
+
+        :param name: Name of the envelope
+        :type name: str
+        :param description: Optional description of the envelope
+        :type description: str
+        :return:
+        :rtype:
+        """
+        self._db.add_envelope(name, description)
 
     def import_transactions_file(self, account_number, transactions_filepath):
         """
@@ -95,7 +130,8 @@ class ParseData:
         transactions_df['account_number'] = account_number
         transactions_df['reviewed'] = False
 
-        self._db.add_bulk_transactions(transactions_df[['account_number', 'amount', 'date', 'reviewed', 'comment']])
+        self._db.add_bulk_bank_transactions(
+            transactions_df[['account_number', 'amount', 'date', 'reviewed', 'comment']])
 
     def get_bank_account_transactions(self, account_number):
         """
@@ -108,6 +144,69 @@ class ParseData:
         transactions_df = self._db.get_account_transactions(account_number)
 
         return transactions_df
+
+    def get_oldest_unreviewed_bank_transactions(self, number):
+        """
+        Get a list of the oldest unreviewed bank transactions, regardless of account.
+
+        Returns a list of tuples:
+          - account name
+          - account number
+          - amount
+          - date
+          - comment
+
+        :param number: Maximum number of transactions to return
+        :type number: int
+        :return: List of tuples with transaction information
+        :rtype: list
+        """
+        # get the accounts details
+        account_detail_dict = {number: name for number, name, _ in self.get_accounts_list()}
+        # get all the transactions
+        transactions_df = self._db.get_oldest_unreviewed_bank_transactions()
+
+        # turn into the list of tuples
+        trans_list = []
+        for _, row in transactions_df.iloc[:number, :].iterrows():
+            account_name = account_detail_dict[row.account_number]
+            trans_info = (account_name, row.account_number, row.amount, row.date, row.comment)
+            trans_list.append(trans_info)
+
+        return trans_list
+
+    def assign_transaction_to_envelope(self, account_number, amount, date, comment, envelope_name):
+        """
+        Assign a bank transaction to an envelope.
+        Actually just creates a new envelope transaction. Bank transactions are immutable once input from files.
+
+        :param amount:
+        :type amount:
+        :param date:
+        :type date:
+        :param comment:
+        :type comment:
+        :param envelope_name:
+        :type envelope_name:
+        """
+        self._db.add_envelope_transaction(envelope_name, amount, date, comment)
+
+        self.mark_reviewed(account_number, amount, date, comment)
+
+    def mark_reviewed(self, account_number, amount, date, comment):
+        """
+        Marks a bank transaction as reviewed
+
+        :param account_number: Account number that the transaction belongs to
+        :type account_number: str
+        :param amount: Amount of the transaction
+        :type amount: float
+        :param date: Date of the transaction
+        :type date: datetime.datetime
+        :param comment: Comment for the transaction
+        :type comment: str
+        """
+        self._db.mark_bank_transaction_reviewed(account_number, amount, date, comment)
 
     def reset_database(self):
         """

@@ -10,7 +10,7 @@ from sqlalchemy.sql.expression import func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, NoResultFound
 
-from Database.Tables import Base, Bank, BankAccount, BankTransaction
+from Database.Tables import Base, Bank, BankAccount, BankTransaction, Envelope, EnvelopeTransaction
 
 # DB constants
 DB_FILENAME = "modailmara-finances.db"
@@ -96,12 +96,25 @@ class DatabaseManager:
                 account_details.append(details)
         return account_details
 
+    def get_all_envelopes(self):
+        """
+        Gets a list of all the Envelope objects in the database
+        :return: List of all Envelope objects
+        :rtype: list
+        """
+        envelope_details = []
+        with Session(self.__db_engine) as session:
+            for envelope in session.execute(select(Envelope)).scalars().all():
+                details = (envelope.name, envelope.description)
+                envelope_details.append(details)
+        return envelope_details
+
     def add_bank_account(self, institution_number, name, account_number):
         """
         Add a bank account to the database. The new bank account is held by an existing bank.
 
-        :param bank: institution_number of The bank that holds the new account
-        :type bank: str
+        :param institution_number: institution_number of The bank that holds the new account
+        :type institution_number: str
         :param name: The name of the new account
         :type name: str
         :param account_number: Unique number to identify the account
@@ -115,7 +128,23 @@ class DatabaseManager:
             session.commit()
         return account
 
-    def add_bulk_transactions(self, transactions_df):
+    def add_envelope(self, envelope_name, description):
+        """
+        Add a bank account to the database. The new bank account is held by an existing bank.
+
+        :param envelope_name: Unique name of the envelope
+        :type envelope_name: str
+        :param description: Description for the envelope
+        :type description: str
+        """
+        with Session(self.__db_engine) as session:
+            # bank = session.query(Bank).get(institution_number)
+            envelope = Envelope(name=envelope_name, description=description)
+            session.add(envelope)
+            session.commit()
+        return envelope
+
+    def add_bulk_bank_transactions(self, transactions_df):
         """
         Adds all transactions in transactions_df (one per row) to the BankTransaction table.
 
@@ -139,9 +168,9 @@ class DatabaseManager:
     def get_account_transactions(self, account_number):
         """
 
-        :param account_number:
-        :type account_number:
-        :return:
+        :param account_number: Number identifying the account to get the transactions from
+        :type account_number: str
+        :return: Dataframe of all the transactions
         :rtype:
         """
         # with Session(self.__db_engine) as session:
@@ -169,3 +198,72 @@ class DatabaseManager:
             )
             result = session.execute(stmt).all()[0]
         return result
+
+    def get_envelope_summary(self, envelope_name):
+        """
+        Gets summary information for an envelope object
+        :param envelope_name:
+        :type envelope_name:
+        :return:
+        :rtype:
+        """
+        with Session(self.__db_engine) as session:
+            stmt = (
+                select(func.count(), func.sum(EnvelopeTransaction.amount),
+                       func.min(EnvelopeTransaction.date), func.max(EnvelopeTransaction.date))
+                .select_from(EnvelopeTransaction)
+                .where(EnvelopeTransaction.envelope == envelope_name)
+            )
+            result = session.execute(stmt).all()[0]
+        return result
+
+    def get_oldest_unreviewed_bank_transactions(self):
+        """
+
+        :return:
+        :rtype:
+        """
+        stmt = select(BankTransaction).where(BankTransaction.reviewed == False).order_by(BankTransaction.date)
+        transactions_df = pd.read_sql(stmt, self.__db_engine)
+
+        return transactions_df
+
+    def add_envelope_transaction(self, envelope_name, amount, date, comment):
+        """
+        Adds a new envelope transaction.
+
+        :param envelope_name: Name of the envelope
+        :type envelope_name: str
+        :param amount: Amount of the transaction
+        :type amount: float
+        :param date: Date of the transaction
+        :type date: datetime.datetime
+        :param comment: Comment about the transaction
+        :type comment: str
+        """
+        with Session(self.__db_engine) as session:
+            stmt = insert(EnvelopeTransaction).values(envelope=envelope_name, amount=amount, date=date, comment=comment)
+
+            session.execute(stmt)
+            session.commit()
+
+    def mark_bank_transaction_reviewed(self, account_number, amount, date, comment):
+        """
+        Changes the 'reviewed' field on an existing bank transaction to True
+
+        :param account_number: Number of the account with the transaction
+        :type account_number: str
+        :param amount: Amount of the transaction
+        :type amount: float
+        :param date: Date of the transaction
+        :type date: datetime
+        :param comment: Comment on the transaction
+        :type comment: str
+        """
+        with Session(self.__db_engine) as session:
+            stmt = select(BankTransaction).filter_by(account_number=account_number, amount=amount,
+                                                     date=date, comment=comment)
+            transaction = session.execute(stmt).scalar_one()
+            transaction.reviewed = True
+
+            session.commit()
