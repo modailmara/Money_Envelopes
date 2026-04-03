@@ -1,7 +1,7 @@
 """
 Main entry point for the program. Command line interface to view and manage envelopes.
 """
-import datetime
+from datetime import datetime
 import locale
 from pathlib import Path
 
@@ -40,6 +40,7 @@ class TextInterface:
             print('  1 - Import a transactions file (maybe create a Bank Account?)')
             print('  2 - Create an Envelope')
             print('  3 - Process unreviewed transactions')
+            print('  4 - Add money to an envelope')
 
             print('\n  98 - Clear all the data in the database.')
             print()
@@ -58,6 +59,8 @@ class TextInterface:
                 self.create_new_envelope()
             elif option == '3':
                 self.process_bank_transactions()
+            elif option == '4':
+                self.add_money_to_envelope()
             elif option == '98':
                 self._parse_data.reset_database()
             elif option.lower() in ['q', 'quit']:
@@ -65,6 +68,54 @@ class TextInterface:
                 break
             else:
                 print('Please enter 1-3 or q. You entered "{}"'.format(option))
+
+    def add_money_to_envelope(self):
+        """
+        Add some money to an envelope in a new envelope transaction.
+        """
+        print()
+
+        # get the name of an existing envelope name
+        env_details = self._parse_data.get_envelope_list()
+        for num, (name, description) in enumerate(env_details):
+            print('{} - {}: {}'.format(num, name, description))
+
+        selected_num = len(env_details) + 1
+        while selected_num >= len(env_details):
+            num_str = input('Select one of the existing envelopes: ').strip()
+            try:
+                selected_num = int(num_str)
+                env_name = env_details[selected_num][0]
+            except ValueError:
+                # don't do anything as the selected_num won't change and the loop will loop
+                pass
+
+        # get a number for the amount
+        amount = None
+        while amount is None:
+            amount_str = input('Enter an amount (no letters, symbols, or commas): ').strip()
+            try:
+                amount = float(amount_str)
+            except ValueError:
+                print("{} isn't a number".format(amount_str))
+
+        # get the date of the transaction (default to today)
+        trans_date = None
+        while trans_date is None:
+            trans_date_str = input('Enter the transaction date (yy-mm-dd). Blank for today: ').strip()
+            if trans_date_str == '':
+                trans_date = datetime.today()
+            else:
+                try:
+                    trans_date = datetime.strptime(trans_date_str, '%y-%m-%d')
+                except ValueError:
+                    print("'{}' is an invalid date format")
+
+        # optionally get a description/comment
+        comment = input("Enter a comment/description (optional): ").strip()
+
+        # create the new envelope transaction
+        self._parse_data.create_envelope_transaction(amount, trans_date, comment, env_name)
 
     def process_bank_transactions(self):
         """
@@ -94,12 +145,13 @@ class TextInterface:
                 if self.is_convertible_to_int(option_words[1]) and int(option_words[1]) < len(old_trans) \
                         and option_words[2] in envelope_names:
                     _, account_number, amount, date, comment = old_trans[int(option_words[1])]
-                    self._parse_data.assign_transaction_to_envelope(account_number, amount, date, comment,
-                                                                    option_words[2])
+                    self._parse_data.create_envelope_transaction(account_number, amount, date, comment,
+                                                                 option_words[2])
             elif option_words[0] == 'r' and len(option_words) == 2:
                 # mark a transaction as reviewed without assigning it to an envelope
                 if self.is_convertible_to_int(option_words[1]) and int(option_words[1]) < len(old_trans):
                     _, account_number, amount, date, comment = old_trans[int(option_words[1])]
+                    self._parse_data.mark_reviewed(amount, date, comment)
                     self._parse_data.mark_reviewed(account_number, amount, date, comment)
 
     def create_new_envelope(self):
@@ -291,8 +343,12 @@ class TextInterface:
         total_str += f"{latest_str:>{latest_width}}"
         print(total_str)
         self.total_envelope_balance = total_balance
-        print("\nLeftover:  {}".format(locale.currency(self.total_bank_balance - self.total_envelope_balance,
-                                                       grouping=True)))
+
+        if self.total_envelope_balance < 0:
+            print("\nNo leftover as the total envelope balance is negative.")
+        else:
+            print("\nLeftover:  {}".format(locale.currency(self.total_bank_balance - self.total_envelope_balance,
+                                                           grouping=True)))
 
     def print_account_summary(self):
         """
@@ -333,8 +389,8 @@ class TextInterface:
         # print the summary lab test info
         total_balance = 0
         num_trans_total = 0
-        earliest_date = datetime.datetime.now()
-        latest_date = datetime.datetime(2000, 1, 1)
+        earliest_date = datetime.today()
+        latest_date = datetime(2000, 1, 1)
         for account_name, balance, num_transactions, earliest, latest in self._parse_data.get_accounts_summary_list():
             info_str = f"{account_name:<{account_width}}"
 

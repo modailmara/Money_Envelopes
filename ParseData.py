@@ -67,6 +67,15 @@ class ParseData:
             summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
         return summary_list
 
+    def get_envelope_list(self):
+        """
+        Returns a list of (name, description) of all existing envelopes
+
+        :return: List of (name, description) tuples of all envelopes
+        :rtype: list
+        """
+        return self._db.get_all_envelopes()
+
     def create_new_account(self, institution_number, bank_name, transit_number, account_number, account_name):
         """
 
@@ -175,7 +184,7 @@ class ParseData:
 
         return trans_list
 
-    def assign_transaction_to_envelope(self, account_number, amount, date, comment, envelope_name):
+    def create_envelope_transaction(self, amount, date, comment, envelope_name):
         """
         Assign a bank transaction to an envelope.
         Actually just creates a new envelope transaction. Bank transactions are immutable once input from files.
@@ -190,8 +199,6 @@ class ParseData:
         :type envelope_name:
         """
         self._db.add_envelope_transaction(envelope_name, amount, date, comment)
-
-        self.mark_reviewed(account_number, amount, date, comment)
 
     def mark_reviewed(self, account_number, amount, date, comment):
         """
