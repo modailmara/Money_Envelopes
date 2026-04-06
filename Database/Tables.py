@@ -81,8 +81,30 @@ class EnvelopeTransaction(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
-    envelope: Mapped[int] = mapped_column(ForeignKey('envelope.name'))
+    envelope: Mapped[str] = mapped_column(ForeignKey('envelope.name'))
     amount: Mapped[float]
     date: Mapped[datetime]
 
     comment: Mapped[Optional[str]]
+
+
+class Macro(Base):
+    """
+    A macro is a group of payments to Envelopes. It's a convenience for a group of payments used often.
+    """
+    __tablename__ = "macro"
+
+    name: Mapped[str] = mapped_column(primary_key=True)
+    description: Mapped[str]
+
+
+class MacroTransaction(Base):
+    """
+    Transaction operations that are part of a macro.
+    """
+    __tablename__ = 'macro_transaction'
+
+    macro: Mapped[str] = mapped_column(ForeignKey('macro.name'))
+    envelope: Mapped[str] = mapped_column(ForeignKey('envelope.name'))
+
+    amount: Mapped[float]
