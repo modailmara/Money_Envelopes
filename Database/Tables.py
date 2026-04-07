@@ -104,7 +104,7 @@ class MacroTransaction(Base):
     """
     __tablename__ = 'macro_transaction'
 
-    macro: Mapped[str] = mapped_column(ForeignKey('macro.name'))
-    envelope: Mapped[str] = mapped_column(ForeignKey('envelope.name'))
+    macro: Mapped[str] = mapped_column(ForeignKey('macro.name'), primary_key=True)
+    envelope: Mapped[str] = mapped_column(ForeignKey('envelope.name'), primary_key=True)
 
     amount: Mapped[float]

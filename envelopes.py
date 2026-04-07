@@ -41,12 +41,20 @@ class TextInterface:
             print('  2 - Create an Envelope')
             print('  3 - Process unreviewed transactions')
             print('  4 - Add money to an envelope')
+            print('  5 - Create a macro')
+            all_macros = self._parse_data.get_all_macros()
+            all_macro_names = [m[0] for m in all_macros]
+            if len(all_macros) == 0:
+                print('No macros defined')
+            else:
+                print('Macros:')
+                for macro_name, macro_desc in all_macros:
+                    print('  {} - {}'.format(macro_name, macro_desc))
 
             print('\n  98 - Clear all the data in the database.')
             print()
 
-            option = input('Enter an option number (q to quit): ')
-            option = option.strip()
+            option = input('Enter an option number or a macro name (q to quit): ').strip()
 
             if option == '1':
                 account_number = self.choose_account_number()
@@ -61,13 +69,66 @@ class TextInterface:
                 self.process_bank_transactions()
             elif option == '4':
                 self.add_money_to_envelope()
+            elif option == '5':
+                self.create_macro()
+            elif option in all_macro_names:
+                self.run_macro(option)
             elif option == '98':
                 self._parse_data.reset_database()
             elif option.lower() in ['q', 'quit']:
                 print('Quitting MoneyEnvelopes')
                 break
             else:
-                print('Please enter 1-3 or q. You entered "{}"'.format(option))
+                print('Please enter 1-3, a macro name, or q. You entered "{}"'.format(option))
+
+    def run_macro(self, macro_name):
+        """
+        Run a pre-defined macro to add money to envelopes
+        :param macro_name: Name of the macro to run
+        :type macro_name: str
+        """
+        print()
+        print('Running macro: {}'.format(macro_name))
+        date_str = input('Enter a date for the macro (yy-mm-dd). Leave blank for today: ')
+        comment = input("Optionally add a comment (will be tagged with the macro name): ")
+        try:
+            date = datetime.strptime(date_str, '%y-%m-%d')
+        except ValueError:
+            # run without the date
+            date = datetime.today()
+        self._parse_data.run_macro(macro_name, date, comment)
+
+    def create_macro(self):
+        """
+        Gets the information for a new macro and creates it.
+        Also prompts for envelope amounts and adds macro transaction records.
+        Does not make any envelope transactions.
+        """
+        print()
+        macro_name = ''
+        while len(macro_name) < 3:
+            macro_name = input("Macro name (longer than 2 characters): ").strip()
+        macro_desc = input('Enter an optional description: ')
+
+        self._parse_data.create_macro(macro_name, macro_desc)
+
+        # list the envelopes
+        env_details = self._parse_data.get_envelope_list()
+        for num, (name, description) in enumerate(env_details):
+            print('{} - {}: {}'.format(num, name, description))
+
+        env_amount = ''
+        while env_amount != 'm':
+            print("Enter an envelope number from above and an amount for this macro (m to return to main):")
+            env_amount = input().strip()
+            if len(env_amount.split()) == 2:
+                env_str, amount_str = [s.strip() for s in env_amount.split()]
+                if self.is_convertible_to_int(env_str) and self.is_convertible_to_float(amount_str):
+                    env_name = env_details[int(env_str)][0]
+                    amount = float(amount_str)
+                    self._parse_data.add_macro_transaction(macro_name, env_name, amount)
+                    print("  {} will be put in {} when macro {} is run".format(locale.currency(amount, grouping=True),
+                                                                               env_name, macro_name))
 
     def add_money_to_envelope(self):
         """
@@ -246,6 +307,21 @@ class TextInterface:
         """
         try:
             int(int_string.strip())
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def is_convertible_to_float(float_string):
+        """
+
+        :param float_string: String we might want to convert to an float
+        :type float_string: str
+        :return: True if the stripped string is an int
+        :rtype: bool
+        """
+        try:
+            float(float_string.strip())
             return True
         except ValueError:
             return False

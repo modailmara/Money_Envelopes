@@ -1,6 +1,8 @@
 """
 Does the work of taking commands from the interface and translating them into DatabaseManager functions.
 """
+import datetime
+
 import pandas as pd
 
 from Database.DatabaseManager import DatabaseManager
@@ -21,7 +23,7 @@ class ParseData:
         :return: List of info for all accounts
         :rtype: list
         """
-        return self._db.get_all_accounts()
+        return self._db.get_all_bank_accounts()
 
     def get_accounts_summary_list(self):
         """
@@ -37,11 +39,11 @@ class ParseData:
         :return: List of tuples (name, balance, #trans, earliest date, latest date)
         :rtype: list
         """
-        accounts = self._db.get_all_accounts()
+        accounts = self._db.get_all_bank_accounts()
         summary_list = []
         for account in accounts:
             name = account[1]
-            num_trans, balance, earliest_trans, latest_trans = self._db.get_account_summary(account[0])
+            num_trans, balance, earliest_trans, latest_trans = self._db.get_bank_account_summary(account[0])
             summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
         return summary_list
 
@@ -139,7 +141,7 @@ class ParseData:
         transactions_df['account_number'] = account_number
         transactions_df['reviewed'] = False
 
-        self._db.add_bulk_bank_transactions(
+        self._db.add_bulk_bank_account_transactions(
             transactions_df[['account_number', 'amount', 'date', 'reviewed', 'comment']])
 
     def get_bank_account_transactions(self, account_number):
@@ -150,7 +152,7 @@ class ParseData:
         :return:
         :rtype:
         """
-        transactions_df = self._db.get_account_transactions(account_number)
+        transactions_df = self._db.get_bank_account_transactions(account_number)
 
         return transactions_df
 
@@ -173,7 +175,7 @@ class ParseData:
         # get the accounts details
         account_detail_dict = {number: name for number, name, _ in self.get_accounts_list()}
         # get all the transactions
-        transactions_df = self._db.get_oldest_unreviewed_bank_transactions()
+        transactions_df = self._db.get_oldest_unreviewed_bank_account_transactions()
 
         # turn into the list of tuples
         trans_list = []
@@ -213,10 +215,57 @@ class ParseData:
         :param comment: Comment for the transaction
         :type comment: str
         """
-        self._db.mark_bank_transaction_reviewed(account_number, amount, date, comment)
+        self._db.mark_bank_account_transaction_reviewed(account_number, amount, date, comment)
 
     def reset_database(self):
         """
         Clears the database of all data. Re-creates tables.
         """
         self._db.reset_database()
+
+    def create_macro(self, macro_name, macro_desc):
+        """
+        Creates a new macro.
+        :param macro_name: Name of the macro
+        :type macro_name: str
+        :param macro_desc: Description of the macro
+        :type macro_desc: str
+        """
+        self._db.add_macro(macro_name, macro_desc)
+
+    def get_all_macros(self):
+        """
+        Gets a list of information about all the macros
+        :return: List of tuples (name, description) for all tuples
+        :rtype: list
+        """
+        return self._db.get_all_macros()
+
+    def add_macro_transaction(self, macro_name, envelope_name, amount):
+        """
+        Adds a stored transaction to a macro. Applied when the macro is run.
+        :param macro_name: Name of the macro to add to
+        :type macro_name: str
+        :param envelope_name: Name of the envelope for this transaction
+        :type envelope_name: str
+        :param amount: The amount to be added to the envelope when the macro is run
+        :type amount: float
+        """
+        self._db.add_macro_transaction(macro_name, envelope_name, amount)
+
+    def run_macro(self, macro_name, date=datetime.datetime.today(), comment=''):
+        """
+        Execute all the transactions in the macro (adding to envelopes).
+        If there is a date (not None) then all envelope transactions are given that date, otherwise date is today.
+
+        :param macro_name:
+        :type macro_name:
+        :param date: Date of the transactions. Default today.
+        :type date: datetime.datetime
+        :param comment:
+        :type comment:
+        """
+        transactions = self._db.get_all_macro_transactions(macro_name)  # [(env_name, amount), ...]
+        comment = "{} ({})".format(comment, macro_name)
+        for env_name, amount in transactions:
+            self._db.add_envelope_transaction(env_name, amount, date, comment)
