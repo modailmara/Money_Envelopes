@@ -182,20 +182,27 @@ class TextInterface:
         """
         Shows bank transactions that have not been reviewed. Allows the user to copy to an envelope or mark as reviewed.
         """
-        envelope_names = [envelope[0] for envelope in self._parse_data.get_envelopes_summary_list()]
+        # envelope_names = [envelope[0] for envelope in self._parse_data.get_envelopes_summary_list()]
         commands = {'m': 'Return to (m)ain menu',
-                    'e <number> <name>': 'Assign transaction <number> to (E)nvelope <name>',
-                    'r <number>': 'Mark transaction <number> as (r)eviewed'}
+                    'e <transaction#> <envelope#>': 'Assign transaction to (e)nvelope',
+                    'r <transaction#>': 'Mark transaction <number> as (r)eviewed'}
         command_str = '\n'.join(['{}: {}'.format(cmd, desc) for cmd, desc in commands.items()])
         option = ''
         while option != 'm':
+
             # show the list of oldest unreviewed transactions
-            old_trans = self._parse_data.get_oldest_unreviewed_bank_transactions(10)
-            print("Transactions: ")
+            old_trans = self._parse_data.get_oldest_unreviewed_bank_transactions(5)
+            print("\nTransactions: ")
             for num, (account_name, account_number, amount, date, comment) in enumerate(old_trans):
                 print('  {} - {} {} {} {}'.format(num, account_name, date.strftime('%d-%b-%Y'),
                                                   locale.currency(amount, grouping=True), comment))
-            print('Envelopes: {}'.format(envelope_names))
+            # print('Envelopes: {}'.format(envelope_names))
+
+            # show envelope list
+            print("\nEnvelopes:")
+            env_details = self._parse_data.get_envelope_list()
+            for num, (name, description) in enumerate(env_details):
+                print('{} - {}: {}'.format(num, name, description))
 
             option = input('\n{}\n> '.format(command_str))
             option = option.strip()
@@ -204,15 +211,15 @@ class TextInterface:
             if option_words[0] == 'e' and len(option_words) == 3:
                 # assign a transaction to an envelope
                 if self.is_convertible_to_int(option_words[1]) and int(option_words[1]) < len(old_trans) \
-                        and option_words[2] in envelope_names:
+                        and self.is_convertible_to_int(option_words[2]) and int(option_words[2]) < len(env_details):
                     _, account_number, amount, date, comment = old_trans[int(option_words[1])]
-                    self._parse_data.create_envelope_transaction(account_number, amount, date, comment,
-                                                                 option_words[2])
+                    self._parse_data.create_envelope_transaction(amount, date, comment,
+                                                                 env_details[int(option_words[2])][0])
+                    self._parse_data.mark_reviewed(account_number, amount, date, comment)
             elif option_words[0] == 'r' and len(option_words) == 2:
                 # mark a transaction as reviewed without assigning it to an envelope
                 if self.is_convertible_to_int(option_words[1]) and int(option_words[1]) < len(old_trans):
                     _, account_number, amount, date, comment = old_trans[int(option_words[1])]
-                    self._parse_data.mark_reviewed(amount, date, comment)
                     self._parse_data.mark_reviewed(account_number, amount, date, comment)
 
     def create_new_envelope(self):
@@ -290,7 +297,7 @@ class TextInterface:
         option = input('Enter an option number (m to return to the main menu): ')
 
         if self.is_convertible_to_int(option) and int(option.strip()) in range(len(filenames)):
-            return IMPORT_DIR / filenames[int(option.strip())]
+            return filenames[int(option.strip())]
         elif option.strip() in ['m', 'main']:
             return None
 
@@ -343,7 +350,7 @@ class TextInterface:
         # column widths
         column_padding = 4
         envelope_str = "Envelope"
-        envelope_width = len('health insurance') + column_padding
+        envelope_width = len('Professional Insurance') + column_padding
         balance_str = "balance"
         balance_width = len('$112,629.15') + column_padding
         num_trans_str = "#trans."
