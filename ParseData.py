@@ -16,6 +16,11 @@ class ParseData:
     def __init__(self, db_filename=None):
         self._db = DatabaseManager(db_filename)
 
+        self.accounts_list = None
+        self.accounts_summary_list = None
+        self.envelope_list = None
+        self.envelope_summary_list = None
+
     def get_accounts_list(self):
         """
         Gets information for all the existing bank accounts in the database: number, name, bank_id
@@ -23,7 +28,9 @@ class ParseData:
         :return: List of info for all accounts
         :rtype: list
         """
-        return self._db.get_all_bank_accounts()
+        if self.accounts_list is None:
+            self.accounts_list = self._db.get_all_bank_accounts()
+        return self.accounts_list
 
     def get_accounts_summary_list(self):
         """
@@ -39,13 +46,15 @@ class ParseData:
         :return: List of tuples (name, balance, #trans, earliest date, latest date)
         :rtype: list
         """
-        accounts = self._db.get_all_bank_accounts()
-        summary_list = []
-        for account in accounts:
-            name = account[1]
-            num_trans, balance, earliest_trans, latest_trans = self._db.get_bank_account_summary(account[0])
-            summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
-        return summary_list
+        if self.accounts_summary_list is None:
+            accounts = self.get_accounts_list()
+            self.accounts_summary_list = []
+            for account in accounts:
+                name = account[1]
+                num_trans, balance, earliest_trans, latest_trans = self._db.get_bank_account_summary(account[0])
+                self.accounts_summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
+
+        return self.accounts_summary_list
 
     def get_envelopes_summary_list(self):
         """
@@ -61,13 +70,14 @@ class ParseData:
         :return: List of tuples (name, balance, #trans, earliest date, latest date)
         :rtype: list
         """
-        envelopes = self._db.get_all_envelopes()
-        summary_list = []
-        for envelope in envelopes:
-            name = envelope[0]
-            num_trans, balance, earliest_trans, latest_trans = self._db.get_envelope_summary(envelope[0])
-            summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
-        return summary_list
+        if self.envelope_summary_list is None:
+            envelopes = self.get_envelope_list()
+            self.envelope_summary_list = []
+            for envelope in envelopes:
+                name = envelope[0]
+                num_trans, balance, earliest_trans, latest_trans = self._db.get_envelope_summary(envelope[0])
+                self.envelope_summary_list.append((name, balance, num_trans, earliest_trans, latest_trans))
+        return self.envelope_summary_list
 
     def get_envelope_list(self):
         """
@@ -76,7 +86,9 @@ class ParseData:
         :return: List of (name, description) tuples of all envelopes
         :rtype: list
         """
-        return self._db.get_all_envelopes()
+        if self.envelope_list is None:
+            self.envelope_list = self._db.get_all_envelopes()
+        return self.envelope_list
 
     def create_new_account(self, institution_number, bank_name, transit_number, account_number, account_name):
         """
@@ -97,6 +109,8 @@ class ParseData:
         self._db.add_bank(bank_name, transit_number, institution_number)
         account = self._db.add_bank_account(institution_number, account_name, account_number)
 
+        self.accounts_changed()
+
         return account
 
     def create_new_envelope(self, name, description):
@@ -111,6 +125,7 @@ class ParseData:
         :rtype:
         """
         self._db.add_envelope(name, description)
+        self.envelopes_changed()
 
     def import_transactions_file(self, account_number, transactions_filepath):
         """
@@ -143,6 +158,8 @@ class ParseData:
 
         self._db.add_bulk_bank_account_transactions(
             transactions_df[['account_number', 'amount', 'date', 'reviewed', 'comment']])
+
+        self.accounts_changed()
 
     def get_bank_account_transactions(self, account_number):
         """
@@ -201,6 +218,31 @@ class ParseData:
         :type envelope_name:
         """
         self._db.add_envelope_transaction(envelope_name, amount, date, comment)
+        self.envelopes_changed()
+
+    def get_all_envelope_transactions(self, envelope_name):
+        """
+        Get all the transactions belonging to an envelope.
+
+        :param envelope_name: Name of the envelope to get transactions
+        :type envelope_name: str
+        :return: All the transactions for this envelope in chronological order (id, date, amount, comment)
+        :rtype: list
+        """
+        trans_list = self._db.get_all_envelope_transactions(envelope_name)
+        return trans_list
+
+    def remove_envelope_transaction(self, transaction_id):
+        """
+        Removes an envelope transaction from the envelope
+
+        :param transaction_id: ID of the transaction to be removed
+        :type transaction_id:
+        :return:
+        :rtype:
+        """
+        self._db.delete_envelope_transaction(transaction_id)
+        self.envelopes_changed()
 
     def mark_reviewed(self, account_number, amount, date, comment):
         """
@@ -222,6 +264,9 @@ class ParseData:
         Clears the database of all data. Re-creates tables.
         """
         self._db.reset_database()
+
+        self.accounts_changed()
+        self.envelopes_changed()
 
     def create_macro(self, macro_name, macro_desc):
         """
@@ -269,3 +314,18 @@ class ParseData:
         comment = "{} ({})".format(comment, macro_name)
         for env_name, amount in transactions:
             self._db.add_envelope_transaction(env_name, amount, date, comment)
+        self.envelopes_changed()
+
+    def envelopes_changed(self):
+        """
+        Flag that the envelope information is stale and needs to be reloaded from the DB
+        """
+        self.envelope_list = None
+        self.envelope_summary_list = None
+
+    def accounts_changed(self):
+        """
+        Flag that the bank account information is stale and needs to be reloaded from the DB
+        """
+        self.accounts_list = None
+        self.accounts_summary_list = None

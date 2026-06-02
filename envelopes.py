@@ -8,6 +8,8 @@ from pathlib import Path
 from ParseData import ParseData
 
 IMPORT_DIR = Path('.') / 'import'
+HST = .15
+INC_TAX = .13
 
 
 class TextInterface:
@@ -38,10 +40,12 @@ class TextInterface:
             print('\n---')
             print('Options:')
             print('  1 - Import a transactions file (maybe create a Bank Account?)')
-            print('  2 - Create an Envelope')
+            print('  2 - Create a new Envelope')
             print('  3 - Process unreviewed transactions')
-            print('  4 - Add money to an envelope')
-            print('  5 - Create a macro')
+            print('  4 - Create a macro')
+            print('  add # $ - Add $ to envelope #')
+            print('  view # - View envelope #')
+            print('  zero # - Add money to make envelope # balance $0')
             all_macros = self._parse_data.get_all_macros()
             all_macro_names = [m[0] for m in all_macros]
             if len(all_macros) == 0:
@@ -54,7 +58,7 @@ class TextInterface:
             print('\n  98 - Clear all the data in the database.')
             print()
 
-            option = input('Enter an option number or a macro name (q to quit): ').strip()
+            option = input('Enter an option number, command, or macro name (q to quit): ').strip()
 
             if option == '1':
                 account_number = self.choose_account_number()
@@ -68,9 +72,22 @@ class TextInterface:
             elif option == '3':
                 self.process_bank_transactions()
             elif option == '4':
-                self.add_money_to_envelope()
-            elif option == '5':
                 self.create_macro()
+            elif option.lower().startswith('add'):
+                add_args = option.split()
+                try:
+                    env_num = int(add_args[1].strip())
+                    amount = float(add_args[2].strip())
+                    self.add_money_to_envelope(env_num, amount)
+                except ValueError:
+                    print("Format is: add # $\nE.g. 'add 1 34.56' to add $34.56 to envelope 1")
+            elif option.lower().startswith('view'):
+                view_args = [arg.strip() for arg in option.split()]
+                try:
+                    env_num = int(view_args[1])
+                    self.view_envelope(env_num)
+                except ValueError:
+                    print("Format is: view #\nE.g. 'view 1' to view the details of envelope 1")
             elif option in all_macro_names:
                 self.run_macro(option)
             elif option == '98':
@@ -80,6 +97,85 @@ class TextInterface:
                 break
             else:
                 print('Please enter 1-3, a macro name, or q. You entered "{}"'.format(option))
+
+    def view_envelope(self, env_num):
+        """
+        View the details of an envelope. Add and remove transactions.
+        :param env_num: Position of the envelope in the list
+        :type env_num: int
+        """
+        print()
+
+        # get the name of an existing envelope name
+        env_details = self._parse_data.get_envelope_list()
+        if env_num >= len(env_details):
+            print("Select a number of one of the existing envelopes. You selected {}.".format(env_num))
+        else:
+            env_name = env_details[env_num][0]
+            commands = {
+                'm': 'Return to (m)ain menu',
+                'add <amount>': 'Add <amount> to this envelope (can be negative)',
+                'remove <transaction#>': 'Remove the transaction from this envelope. Will be marked as not reviewed',
+            }
+            command_str = '\n'.join(['{}: {}'.format(cmd, desc) for cmd, desc in commands.items()])
+            option = ''
+            while option != 'm':
+                print("***  {}  ***\n".format(env_name))
+                env_transactions = self._parse_data.get_all_envelope_transactions(env_name)
+
+                column_padding = 4
+                num_title = '#'
+                num_width = len('100') + column_padding
+                date_title = "Date"
+                date_width = len('dd-mmm-yyyy') + column_padding
+                amount_title = "Amount"
+                amount_width = len('$112,629.15') + column_padding
+                comment_title = "Comment"
+                comment_width = len("this is a reasonable sized comment")
+
+                # print the headings
+                heading_str = f"{num_title:<{num_width}}"
+                heading_str += f"{date_title:^{date_width}}"
+                heading_str += f"{amount_title:>{amount_width}}"
+                heading_str += f"{comment_title:^{comment_width}}"
+                print(heading_str)
+                print('-' * (num_width + date_width + amount_width + comment_width))
+                balance = 0
+                num_to_transaction_id = {}
+                for num, (trans_id, date, amount, comment) in enumerate(env_transactions):
+                    num_to_transaction_id[num] = trans_id
+                    balance += amount
+
+                    info_str = f"{num:>3}" + " " * column_padding
+                    info_str += f"{date.strftime('%d-%b-%Y'):<{date_width}}"
+
+                    money_str = locale.currency(amount, grouping=True)
+                    info_str += f"{money_str:>{amount_width}}"
+
+                    info_str += f"    {comment}"
+
+                    print(info_str)
+                print('-' * (num_width + date_width + amount_width + comment_width))
+                empty_str = ' ' * num_width
+                total_str = 'Total'
+                total_str = f"{empty_str}{total_str:^{date_width}}"
+                total_balance_str = locale.currency(balance, grouping=True)
+                total_str += f"{total_balance_str:>{amount_width}}"
+                print(total_str)
+
+                option = input('\n{}\n> '.format(command_str))
+                option = option.strip()
+
+                option_words = [word.strip() for word in option.split(' ')]
+                if option_words[0] == 'add' and len(option_words) == 2:
+                    # add money to the envelope
+                    # add <amount>': 'Add <amount> to this envelope (can be negative)'
+                    if self.is_convertible_to_float(option_words[1]):
+                        self.add_money_to_envelope(env_num, float(option_words[1]))
+                elif option_words[0] == 'remove' and len(option_words) == 2:
+                    # 'remove <transaction#>': 'Remove the transaction from this envelope',
+                    if self.is_convertible_to_int(option_words[1]):
+                        self._parse_data.remove_envelope_transaction(num_to_transaction_id[int(option_words[1])])
 
     def run_macro(self, macro_name):
         """
@@ -130,7 +226,7 @@ class TextInterface:
                     print("  {} will be put in {} when macro {} is run".format(locale.currency(amount, grouping=True),
                                                                                env_name, macro_name))
 
-    def add_money_to_envelope(self):
+    def add_money_to_envelope(self, env_num, amount):
         """
         Add some money to an envelope in a new envelope transaction.
         """
@@ -138,45 +234,17 @@ class TextInterface:
 
         # get the name of an existing envelope name
         env_details = self._parse_data.get_envelope_list()
-        for num, (name, description) in enumerate(env_details):
-            print('{} - {}: {}'.format(num, name, description))
+        if env_num >= len(env_details):
+            print("Select a number of one of the existing envelopes. You selected {}.".format(env_num))
+        else:
+            env_name = env_details[env_num][0]
+            trans_date = datetime.today()
 
-        selected_num = len(env_details) + 1
-        while selected_num >= len(env_details):
-            num_str = input('Select one of the existing envelopes: ').strip()
-            try:
-                selected_num = int(num_str)
-                env_name = env_details[selected_num][0]
-            except ValueError:
-                # don't do anything as the selected_num won't change and the loop will loop
-                pass
+            # optionally get a description/comment
+            comment = input("Enter a comment/description (optional): ").strip()
 
-        # get a number for the amount
-        amount = None
-        while amount is None:
-            amount_str = input('Enter an amount (no letters, symbols, or commas): ').strip()
-            try:
-                amount = float(amount_str)
-            except ValueError:
-                print("{} isn't a number".format(amount_str))
-
-        # get the date of the transaction (default to today)
-        trans_date = None
-        while trans_date is None:
-            trans_date_str = input('Enter the transaction date (yy-mm-dd). Blank for today: ').strip()
-            if trans_date_str == '':
-                trans_date = datetime.today()
-            else:
-                try:
-                    trans_date = datetime.strptime(trans_date_str, '%y-%m-%d')
-                except ValueError:
-                    print("'{}' is an invalid date format")
-
-        # optionally get a description/comment
-        comment = input("Enter a comment/description (optional): ").strip()
-
-        # create the new envelope transaction
-        self._parse_data.create_envelope_transaction(amount, trans_date, comment, env_name)
+            # create the new envelope transaction
+            self._parse_data.create_envelope_transaction(amount, trans_date, comment, env_name)
 
     def process_bank_transactions(self):
         """
@@ -185,7 +253,8 @@ class TextInterface:
         # envelope_names = [envelope[0] for envelope in self._parse_data.get_envelopes_summary_list()]
         commands = {'m': 'Return to (m)ain menu',
                     'e <transaction#> <envelope#>': 'Assign transaction to (e)nvelope',
-                    'r <transaction#>': 'Mark transaction <number> as (r)eviewed'}
+                    'r <transaction#>': 'Mark transaction <number> as (r)eviewed',
+                    'i <transaction#>': 'Mark as income - 15% HST, 13% Income tax, and reviewed'}
         command_str = '\n'.join(['{}: {}'.format(cmd, desc) for cmd, desc in commands.items()])
         option = ''
         while option != 'm':
@@ -221,6 +290,16 @@ class TextInterface:
                 if self.is_convertible_to_int(option_words[1]) and int(option_words[1]) < len(old_trans):
                     _, account_number, amount, date, comment = old_trans[int(option_words[1])]
                     self._parse_data.mark_reviewed(account_number, amount, date, comment)
+            elif option_words[0] == 'i' and len(option_words) == 2:
+                if self.is_convertible_to_int(option_words[1]) and int(option_words[1]) < len(old_trans):
+                    _, account_number, amount, date, comment = old_trans[int(option_words[1])]
+                    env_names = [name for name, _ in env_details]
+                    if 'HST' in env_names and 'Income tax' in env_names:
+                        self._parse_data.create_envelope_transaction(HST * amount, date, comment, 'HST')
+                        self._parse_data.create_envelope_transaction(INC_TAX * amount, date, comment, 'Income tax')
+                        self._parse_data.mark_reviewed(account_number, amount, date, comment)
+                    else:
+                        print("No 'HST' and/or 'Income tax' envelopes. No actions performed.")
 
     def create_new_envelope(self):
         """
@@ -338,17 +417,19 @@ class TextInterface:
         Prints a summary of the current state of the envelopes
 
         Format example:
-          Envelope              Balance    #trans.      Earliest         Latest
+          #      Envelope              Balance    #trans.      Earliest         Latest
           ----------------------------------------------------------------------
-          Payroll            $37,543.05         5    01-Jan-2021    02-Apr-2023
-          Insurance          $37,543.05     3,000    15-Nov-2016    25-Feb-2018
-          Health Insurance   $37,543.05    10,000    15-Nov-2016    25-Feb-2018
+          1      Payroll            $37,543.05         5    01-Jan-2021    02-Apr-2023
+          2      Insurance          $37,543.05     3,000    15-Nov-2016    25-Feb-2018
+          3      Health Insurance   $37,543.05    10,000    15-Nov-2016    25-Feb-2018
           ----------------------------------------------------------------------
-          Total:            $112,629.15    13,005    15-Nov-2016    02-Apr-2023
+          Total:                   $112,629.15    13,005    15-Nov-2016    02-Apr-2023
         """
         print()
         # column widths
         column_padding = 4
+        num_title = '#'
+        num_width = len('100') + column_padding
         envelope_str = "Envelope"
         envelope_width = len('Professional Insurance') + column_padding
         balance_str = "balance"
@@ -361,21 +442,24 @@ class TextInterface:
         latest_width = earliest_width
 
         # print the headings
-        heading_str = f"{envelope_str:^{envelope_width}}"
+        heading_str = f"{num_title:<{num_width}}"
+        heading_str += f"{envelope_str:^{envelope_width}}"
         heading_str += f"{balance_str:>{balance_width}}"
         heading_str += f"{num_trans_str:>{num_trans_width}}"
         heading_str += f"{earliest_str:>{earliest_width}}"
         heading_str += f"{latest_str:>{latest_width}}"
         print(heading_str)
-        print('-' * (envelope_width + balance_width + num_trans_width + earliest_width + latest_width))
+        print('-' * (num_width + envelope_width + balance_width + num_trans_width + earliest_width + latest_width))
 
         # print the summary lab test info
         total_balance = 0
         num_trans_total = 0
         earliest_date = None
         latest_date = None
-        for envelope_name, balance, num_transactions, earliest, latest in self._parse_data.get_envelopes_summary_list():
-            info_str = f"{envelope_name:<{envelope_width}}"
+        for num, (envelope_name, balance, num_transactions, earliest, latest) \
+                in enumerate(self._parse_data.get_envelopes_summary_list()):
+            info_str = f"{num:>3}" + " " * column_padding
+            info_str += f"{envelope_name:<{envelope_width}}"
 
             balance = 0 if balance is None else balance
             total_balance += balance
@@ -408,9 +492,10 @@ class TextInterface:
 
             print(info_str)
 
-        print('-' * (envelope_width + balance_width + num_trans_width + earliest_width + latest_width))
+        print('-' * (num_width + envelope_width + balance_width + num_trans_width + earliest_width + latest_width))
+        empty_num_str = ' ' * num_width
         total_str = 'Total'
-        total_str = f"{total_str:^{envelope_width}}"
+        total_str = f"{empty_num_str}{total_str:^{envelope_width}}"
         total_balance_str = locale.currency(total_balance, grouping=True)
         total_str += f"{total_balance_str:>{balance_width}}"
         total_str += f"{num_trans_total:>{num_trans_width}}"

@@ -4,7 +4,7 @@ All the interaction with the database should go through here
 from datetime import datetime
 
 import pandas as pd
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, delete
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.sql.expression import func
 from sqlalchemy.orm import Session
@@ -256,6 +256,25 @@ class DatabaseManager:
             result = session.execute(stmt).all()[0]
         return result
 
+    def get_all_envelope_transactions(self, env_name):
+        """
+        Returns all the transactions in the given envelope.
+        :param env_name: Name of the envelope
+        :type env_name: str
+        :return: List of tuples (transaction_id, date, amount, comment)
+        :rtype: list
+        """
+        trans_list = []
+        with Session(self.__db_engine) as session:
+            stmt = (
+                select(EnvelopeTransaction)
+                    .where(EnvelopeTransaction.envelope == env_name)
+                    .order_by(EnvelopeTransaction.date)
+            )
+            for transaction in session.execute(stmt).scalars().all():
+                trans_list.append((transaction.id, transaction.date, transaction.amount, transaction.comment))
+        return trans_list
+
     def add_envelope_transaction(self, envelope_name, amount, date, comment):
         """
         Adds a new envelope transaction.
@@ -271,6 +290,19 @@ class DatabaseManager:
         """
         with Session(self.__db_engine) as session:
             stmt = insert(EnvelopeTransaction).values(envelope=envelope_name, amount=amount, date=date, comment=comment)
+
+            session.execute(stmt)
+            session.commit()
+
+    def delete_envelope_transaction(self, transaction_id):
+        """
+
+        :param transaction_id:
+        :type transaction_id:
+        """
+        print("Transaction ID: {}".format(transaction_id))
+        with Session(self.__db_engine) as session:
+            stmt = delete(EnvelopeTransaction).where(EnvelopeTransaction.id == transaction_id)
 
             session.execute(stmt)
             session.commit()
