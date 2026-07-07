@@ -250,8 +250,8 @@ class DatabaseManager:
             stmt = (
                 select(func.count(), func.sum(EnvelopeTransaction.amount),
                        func.min(EnvelopeTransaction.date), func.max(EnvelopeTransaction.date))
-                .select_from(EnvelopeTransaction)
-                .where(EnvelopeTransaction.envelope == envelope_name)
+                    .select_from(EnvelopeTransaction)
+                    .where(EnvelopeTransaction.envelope == envelope_name)
             )
             result = session.execute(stmt).all()[0]
         return result
@@ -274,6 +274,24 @@ class DatabaseManager:
             for transaction in session.execute(stmt).scalars().all():
                 trans_list.append((transaction.id, transaction.date, transaction.amount, transaction.comment))
         return trans_list
+
+    def get_envelope_balance(self, envelope_name):
+        """
+        Returns the balance of an envelope
+
+        :param envelope_name: Name of the envelope
+        :type envelope_name: str
+        :return: Balance amount of the named envelope
+        :rtype: float
+        """
+        with Session(self.__db_engine) as session:
+            stmt = (
+                select(func.sum(EnvelopeTransaction.amount))
+                    .select_from(EnvelopeTransaction)
+                    .where(EnvelopeTransaction.envelope == envelope_name)
+            )
+            result = round(session.execute(stmt).one()[0], ndigits=2)
+        return result
 
     def add_envelope_transaction(self, envelope_name, amount, date, comment):
         """

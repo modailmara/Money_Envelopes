@@ -60,6 +60,9 @@ class TextInterface:
 
             option = input('Enter an option number, command, or macro name (q to quit): ').strip()
 
+            # separate into separate strings
+            arg_list = [arg.lower().strip() for arg in option.split()]
+
             if option == '1':
                 account_number = self.choose_account_number()
                 if account_number is not None:
@@ -73,30 +76,62 @@ class TextInterface:
                 self.process_bank_transactions()
             elif option == '4':
                 self.create_macro()
-            elif option.lower().startswith('add'):
-                add_args = option.split()
+            elif arg_list[0] == 'add' and len(arg_list) == 3:  # add # $ - Add $ to envelope #'
                 try:
-                    env_num = int(add_args[1].strip())
-                    amount = float(add_args[2].strip())
+                    env_num = int(arg_list[1])
+                    amount = float(arg_list[2])
                     self.add_money_to_envelope(env_num, amount)
                 except ValueError:
                     print("Format is: add # $\nE.g. 'add 1 34.56' to add $34.56 to envelope 1")
-            elif option.lower().startswith('view'):
-                view_args = [arg.strip() for arg in option.split()]
+            elif arg_list[0] == 'view' and len(arg_list) == 2:  # view # - View envelope #
                 try:
-                    env_num = int(view_args[1])
+                    env_num = int(arg_list[1])
                     self.view_envelope(env_num)
                 except ValueError:
                     print("Format is: view #\nE.g. 'view 1' to view the details of envelope 1")
+            elif arg_list[0] == 'zero' and len(arg_list) == 2:  # zero # - Add money to make envelope # balance $0
+                try:
+                    env_num = int(arg_list[1])
+                    self.zero_envelope(env_num)
+                except ValueError:
+                    print("Format is: zero #\nE.g. 'zero 1' to view the details of envelope 1")
+
             elif option in all_macro_names:
                 self.run_macro(option)
             elif option == '98':
                 self._parse_data.reset_database()
-            elif option.lower() in ['q', 'quit']:
+            elif arg_list[0] in ['q', 'quit']:
                 print('Quitting MoneyEnvelopes')
                 break
             else:
                 print('Please enter 1-3, a macro name, or q. You entered "{}"'.format(option))
+
+    def zero_envelope(self, env_num):
+        """
+        Adds or subtracts money to make an envelope balance equal to zero
+        :param env_num: Position of the envelope in the list
+        :type env_num: int
+        """
+        print()
+
+        # get the name of an existing envelope name
+        env_details = self._parse_data.get_envelope_list()
+        if env_num >= len(env_details):
+            print("Select a number of one of the existing envelopes. You selected {}.".format(env_num))
+        else:
+            env_name = env_details[env_num][0]
+
+            # calculate the amount - negative of the current balance
+            balance = self._parse_data.get_envelope_balance(env_name)
+            amount = -balance
+
+            trans_date = datetime.today()
+
+            # optionally get a description/comment
+            comment = input("Enter a comment/description (optional): ").strip()
+
+            # create the new envelope transaction
+            self._parse_data.create_envelope_transaction(amount, trans_date, comment, env_name)
 
     def view_envelope(self, env_num):
         """

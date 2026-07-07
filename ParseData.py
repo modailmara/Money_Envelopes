@@ -232,6 +232,17 @@ class ParseData:
         trans_list = self._db.get_all_envelope_transactions(envelope_name)
         return trans_list
 
+    def get_envelope_balance(self, envelope_name):
+        """
+        Returns the current balance of the named envelope.
+        :param envelope_name: Name of the envelope to get the balance
+        :type envelope_name: str
+        :return: Balance of the envelope
+        :rtype: float
+        """
+        balance = self._db.get_envelope_balance(envelope_name)
+        return balance
+
     def remove_envelope_transaction(self, transaction_id):
         """
         Removes an envelope transaction from the envelope
