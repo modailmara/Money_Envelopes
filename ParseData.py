@@ -2,6 +2,7 @@
 Does the work of taking commands from the interface and translating them into DatabaseManager functions.
 """
 import datetime
+import pathlib
 
 import pandas as pd
 
@@ -340,3 +341,18 @@ class ParseData:
         """
         self.accounts_list = None
         self.accounts_summary_list = None
+
+    def export_data(self):
+        """
+        Output data to CSV files
+        """
+        export_dir = pathlib.Path('./backup')
+
+        # bank, accounts, and bank transactions
+        self._db.export_bank_transactions(export_dir)
+
+        # envelope transactions
+        self._db.export_envelope_transactions(export_dir)
+
+        # macros
+        self._db.export_macros(export_dir)

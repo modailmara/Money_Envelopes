@@ -1,7 +1,7 @@
 """
 All the interaction with the database should go through here
 """
-from datetime import datetime
+from datetime import datetime, date
 
 import pandas as pd
 from sqlalchemy import create_engine, select, delete
@@ -387,4 +387,58 @@ class DatabaseManager:
                 details = (transaction.envelope, transaction.amount)
                 macro_details.append(details)
         return macro_details
+
+    # ---------------------------------------------
+    # export
+    # ---------------------------------------------
+
+    def export_bank_transactions(self, directory):
+        """
+                Exports all bank transactions with bank and account details to a CSV in the specified directory
+                :param directory: Directory to put the CSV export in
+                :type directory: pathlib object
+                """
+        stmt = select(
+            Bank.name, Bank.institution_number, Bank.transit_number,
+            BankAccount.name, BankAccount.account_number,
+            BankTransaction.amount, BankTransaction.date, BankTransaction.comment, BankTransaction.reviewed
+        ) \
+            .where(Bank.institution_number == BankAccount.bank_id) \
+            .where(BankTransaction.account_number == BankAccount.account_number)\
+            .order_by(Bank.institution_number, BankAccount.account_number, BankTransaction.date)
+
+        bank_trans_df = pd.read_sql(stmt, self.__db_engine)
+        bank_trans_df.to_csv(directory / '{}_bank-transactions.csv'.format(date.today()))
+
+    def export_envelope_transactions(self, directory):
+        """
+        Exports all envelope transactions details to a CSV in the specified directory
+        :param directory: Directory to put the CSV export in
+        :type directory: pathlib object
+        """
+        stmt = select(
+            Envelope.name, Envelope.description,
+            EnvelopeTransaction.amount, EnvelopeTransaction.date, EnvelopeTransaction.comment
+        )\
+            .where(EnvelopeTransaction.envelope == Envelope.name)\
+            .order_by(Envelope.name, EnvelopeTransaction.date)
+
+        envelope_trans_df = pd.read_sql(stmt, self.__db_engine)
+        envelope_trans_df.to_csv(directory / '{}_envelope-transactions.csv'.format(date.today()))
+
+    def export_macros(self, directory):
+        """
+        Exports all macros to a CSV in the specified directory
+        :param directory: Directory to put the CSV export in
+        :type directory: pathlib object
+        """
+        stmt = select(
+            Macro.name, Macro.description,
+            MacroTransaction.amount, MacroTransaction.envelope
+        )\
+            .where(Macro.name == MacroTransaction.macro)\
+            .order_by(Macro.name)
+
+        macro_trans_df = pd.read_sql(stmt, self.__db_engine)
+        macro_trans_df.to_csv(directory / '{}_macros.csv'.format(date.today()))
 

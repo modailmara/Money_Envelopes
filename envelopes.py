@@ -46,6 +46,7 @@ class TextInterface:
             print('  add # $ - Add $ to envelope #')
             print('  view # - View envelope #')
             print('  zero # - Add money to make envelope # balance $0')
+            print('  backup - Backup all data to external CSV files')
             all_macros = self._parse_data.get_all_macros()
             all_macro_names = [m[0] for m in all_macros]
             if len(all_macros) == 0:
@@ -95,7 +96,8 @@ class TextInterface:
                     self.zero_envelope(env_num)
                 except ValueError:
                     print("Format is: zero #\nE.g. 'zero 1' to view the details of envelope 1")
-
+            elif arg_list[0] == 'backup' and len(arg_list) == 1:  # backup - output all data to CSV files
+                self.backup()
             elif option in all_macro_names:
                 self.run_macro(option)
             elif option == '98':
@@ -104,7 +106,13 @@ class TextInterface:
                 print('Quitting MoneyEnvelopes')
                 break
             else:
-                print('Please enter 1-3, a macro name, or q. You entered "{}"'.format(option))
+                print('Please enter 1-4, add, view, zero, backup, a macro name, or q. You entered "{}"'.format(option))
+
+    def backup(self):
+        """
+        Write out all the data to CSV files
+        """
+        self._parse_data.export_data()
 
     def zero_envelope(self, env_num):
         """

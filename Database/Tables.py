@@ -4,12 +4,11 @@ Definitions for all the database tables.
 Assumptions:
   - only one user/owner/business
 """
+from datetime import datetime
 
 from sqlalchemy import ForeignKey, String
 from typing import Optional, List
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
-from datetime import datetime
 
 
 class Base(DeclarativeBase):
@@ -25,7 +24,6 @@ class Bank(Base):
     institution_number: Mapped[str] = mapped_column(String(3), primary_key=True)
     name: Mapped[str] = mapped_column(unique=True)
     transit_number: Mapped[str] = mapped_column(String(5))
-
     accounts: Mapped[Optional[List["BankAccount"]]] = relationship(back_populates="bank", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
@@ -42,7 +40,6 @@ class BankAccount(Base):
 
     account_number: Mapped[str] = mapped_column(String(10), primary_key=True)
     name: Mapped[str]
-
     bank_id = mapped_column(ForeignKey("bank.institution_number", ondelete='CASCADE'))
     bank: Mapped["Bank"] = relationship(back_populates='accounts')
 
@@ -57,7 +54,6 @@ class BankTransaction(Base):
     amount: Mapped[float] = mapped_column(primary_key=True)
     date: Mapped[datetime] = mapped_column(primary_key=True)
     comment: Mapped[str] = mapped_column(primary_key=True)
-
     reviewed: Mapped[bool]
 
 
@@ -68,7 +64,6 @@ class Envelope(Base):
     __tablename__ = "envelope"
 
     name: Mapped[str] = mapped_column(primary_key=True)
-
     description: Mapped[Optional[str]]
 
 
@@ -84,7 +79,6 @@ class EnvelopeTransaction(Base):
     envelope: Mapped[str] = mapped_column(ForeignKey('envelope.name'))
     amount: Mapped[float]
     date: Mapped[datetime]
-
     comment: Mapped[Optional[str]]
 
 
@@ -106,5 +100,4 @@ class MacroTransaction(Base):
 
     macro: Mapped[str] = mapped_column(ForeignKey('macro.name'), primary_key=True)
     envelope: Mapped[str] = mapped_column(ForeignKey('envelope.name'), primary_key=True)
-
     amount: Mapped[float]
